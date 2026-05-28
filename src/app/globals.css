@@ -3,91 +3,72 @@
 @tailwind utilities;
 
 /*
- * The Alchemille — base layer
+ * Alchemille v1 — base layer
  *
- * Stage-driven CSS variables. Nigredo is desaturated. Albedo brightens.
- * Rubedo blooms with full palette. The layout shell sets data-stage on <html>.
+ * Single light theme. Warm cream paper-like surface with deep forest text.
+ * Terracotta = action. Gold = achievement only. Sage = calm/secondary.
+ *
+ * Mobile-first. Effortless one-handed use is the test.
  */
 
 :root {
-  /* Default = Albedo (cream + forest). Set on html by layout shell. */
-  --background: 251 247 238; /* cream #FBF7EE */
-  --foreground: 47 79 58; /* forest #2F4F3A */
-  --muted: 107 122 114; /* sage-grey */
-  --border: 143 168 154; /* mid-sage */
-  --accent: 168 135 76; /* gold */
+  --background: 244 239 227; /* cream #F4EFE3 */
+  --foreground: 46 67 50; /* deep forest #2E4332 */
+  --muted: 143 163 126; /* sage #8FA37E */
+  --border: 216 224 207; /* sage tint #D8E0CF */
+  --action: 192 107 71; /* terracotta #C06B47 */
+  --achievement: 201 162 75; /* soft gold #C9A24B */
 
-  /* Georgia is a system serif on every platform — no import needed.
-     This fallback variable is referenced by tailwind's serif stack. */
-  --font-georgia-fallback: Georgia;
-}
-
-[data-stage="nigredo"] {
-  --background: 232 229 222; /* bone */
-  --foreground: 58 66 57; /* desaturated forest */
-  --muted: 122 128 121;
-  --border: 188 192 184;
-  --accent: 168 135 76;
-}
-
-[data-stage="albedo"] {
-  --background: 251 247 238;
-  --foreground: 47 79 58;
-  --muted: 107 122 114;
-  --border: 143 168 154;
-  --accent: 168 135 76;
-}
-
-[data-stage="rubedo"] {
-  --background: 251 247 238;
-  --foreground: 47 79 58;
-  --muted: 107 122 114;
-  --border: 143 168 154;
-  --accent: 201 83 58; /* coral blooms */
-}
-
-html {
+  /* iOS PWA viewport */
   color-scheme: light;
+}
+
+html,
+body {
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Disable text size auto-adjust on iOS rotations */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
 body {
-  background: rgb(var(--background));
-  color: rgb(var(--foreground));
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans), Inter, ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-feature-settings: "ss01", "cv11";
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Safe areas for installed PWA on notched devices */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-h1, h2, h3, h4, h5, h6, .font-serif {
-  font-family: Georgia, var(--font-georgia-fallback), ui-serif, Cambria,
-    "Times New Roman", Times, serif;
-  font-weight: 400;
-  letter-spacing: -0.01em;
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display), "Cormorant Garamond", ui-serif, Georgia,
+    serif;
+  font-weight: 500;
+  letter-spacing: -0.005em;
 }
 
-/* Editorial pull-quote — used by journal entries and module cards */
-.pull-quote {
-  font-family: Georgia, ui-serif, serif;
-  font-style: italic;
-  background: rgb(var(--background));
-  border-left: 2px solid rgb(var(--accent));
-  padding: 1rem 1.25rem;
+/* Tap targets — WCAG / touch-friendly minimum */
+button,
+[role="button"],
+a {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Window-light gradient — the centerpiece dashboard element.
-   Gold light pouring through forest green; dims over the post-practice window. */
-.window-light {
-  background: radial-gradient(
-    ellipse at 50% 0%,
-    rgb(212 167 75 / var(--window-intensity, 0)) 0%,
-    rgb(212 167 75 / calc(var(--window-intensity, 0) * 0.4)) 30%,
-    transparent 70%
-  );
-  transition: --window-intensity 2400ms cubic-bezier(0.16, 1, 0.3, 1);
+/* Subdue Chrome/Safari focus rings; use our own for accessibility */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid rgb(var(--action));
+  outline-offset: 2px;
+  border-radius: 0.5rem;
 }
 
 @layer utilities {
@@ -96,6 +77,11 @@ h1, h2, h3, h4, h5, h6, .font-serif {
   }
   .text-pretty {
     text-wrap: pretty;
+  }
+
+  /* Reserve room for the fixed bottom nav on mobile shell pages */
+  .pb-shell {
+    padding-bottom: calc(theme("spacing.bottom-nav") + env(safe-area-inset-bottom));
   }
 }
 

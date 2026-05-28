@@ -13,6 +13,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
  *   Copy the signing secret into CLERK_WEBHOOK_SECRET.
  *
  * Uses service-role key — bypasses RLS to create the users row.
+ * Note: onboarding_completed_at is NOT set here — that's set by the
+ * onboarding server action when the student finishes step 2.
  */
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET;
@@ -67,15 +69,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const fullName =
+    const displayName =
       [data.first_name, data.last_name].filter(Boolean).join(" ") || null;
 
     const { error } = await supabase.from("users").upsert(
       {
         clerk_user_id: data.id,
         email: primaryEmail,
-        name: fullName,
-        profile_photo_url: data.image_url ?? null,
+        display_name: displayName,
+        avatar_url: data.image_url ?? null,
       },
       { onConflict: "clerk_user_id" }
     );

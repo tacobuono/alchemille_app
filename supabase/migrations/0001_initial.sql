@@ -1,317 +1,300 @@
 -- =====================================================================
---  The Alchemille — Student App, Initial Schema
+--  Alchemille — v1 schema
 --  Migration: 0001_initial
 --
---  Tables: users, cohorts, practice_sessions, journal_entries,
---          modules, module_progress, voice_notes, community_letters
+--  Governing principle: every required field must be something the act
+--  of practicing already produced. The Fast Path (intention + at-least-
+--  one routine + at-least-one opened-into + pps_quality 1-10) is the
+--  ONLY thing that drives the streak. Texture chips, journal text,
+--  creation logs, and HRV are all optional and cannot make a complete
+--  day feel incomplete.
 --
---  Auth: Clerk owns identity. Supabase row ownership is matched by
---        clerk_user_id stored on each users row. RLS policies use
---        auth.jwt() ->> 'sub' (Clerk session token's sub claim,
---        configured via the Clerk JWT template named 'supabase').
+--  Auth: Clerk owns identity. Each row is owned via clerk_user_id on
+--  users; RLS uses auth.jwt() ->> 'sub' to match.
+--
+--  Phase-2 hooks: users.handle (nullable, unique) + users.display_name
+--  reserve the namespace for the social layer.
 -- =====================================================================
 
--- ---------- Extensions ----------
 create extension if not exists "uuid-ossp";
 create extension if not exists "pgcrypto";
-
--- ---------- Enums ----------
-do $$ begin
-  create type user_role as enum ('student', 'teacher');
-exception when duplicate_object then null; end $$;
-
-do $$ begin
-  create type alchemical_stage as enum ('nigredo', 'albedo', 'rubedo');
-exception when duplicate_object then null; end $$;
-
-do $$ begin
-  create type voice_note_trigger as enum (
-    'first_practice',
-    'week_one_complete',
-    'halfway',
-    'last_day',
-    'return_after_gap'
-  );
-exception when duplicate_object then null; end $$;
-
--- ---------- Herb catalog (reference data, not a table) ----------
--- Order matches Alison's curriculum progression. herb_planted on
--- practice_sessions stores the slug. UI looks up display data.
--- lady's_mantle, nettle, chamomile, oat_straw, rose, tulsi,
--- ashwagandha, lavender, calendula, lemon_balm, mugwort, yarrow
+create extension if not exists "citext";
 
 -- =====================================================================
---  Cohorts
+--  ENUM-like constraints via CHECK on text columns
+--  (Easier to extend than Postgres ENUM types; matches our TS catalogs.)
 -- =====================================================================
-create table if not exists public.cohorts (
-  id uuid primary key default gen_random_uuid(),
-  course_name text not null default 'The Post-Practice State',
-  start_date date not null,
-  end_date date not null,
-  max_students integer not null default 10,
-  created_at timestamptz not null default now()
-);
 
 -- =====================================================================
---  Users — extends Clerk identity with app-specific profile data
+--  users — extends Clerk identity
 -- =====================================================================
 create table if not exists public.users (
   id uuid primary key default gen_random_uuid(),
   clerk_user_id text not null unique,
-  email text not null unique,
-  name text,
-  profile_photo_url text,
-  practice_space_photo_url text,
+  email citext not null unique,
+  display_name text,
+  handle citext unique,                  -- Phase 2 social: @username slot
+  avatar_url text,
   timezone text not null default 'America/Chicago',
   language_preference text not null default 'en',
-  enrollment_date date,
-  cohort_id uuid references public.cohorts(id) on delete set null,
-  role user_role not null default 'student',
-  journal_visibility_consent boolean not null default false,
-  garden_visibility_to_cohort boolean not null default false,
-  created_at timestamptz not null default now()
+  onboarding_completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists users_clerk_user_id_idx on public.users (clerk_user_id);
-create index if not exists users_cohort_id_idx on public.users (cohort_id);
 
 -- =====================================================================
---  Practice Sessions
+--  check_ins — one row per user per local date.
+--  local_date drives streak math; checked_in_at is the wall-clock stamp.
 -- =====================================================================
-create table if not exists public.practice_sessions (
+create table if not exists public.check_ins (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
-  started_at timestamptz not null,
-  ended_at timestamptz,
-  duration_minutes integer,
-  practice_type text not null,
-  ujjayi_completed boolean not null default false,
-  drishti_completed boolean not null default false,
-  tapas_duration_minutes integer,
-  savasana_duration_minutes integer,
-  window_opened_at timestamptz,
-  window_closes_at timestamptz,
-  herb_planted text,
+  local_date date not null,
+  checked_in_at timestamptz not null default now(),
+
+  intention text check (intention in ('creative','deep_learning','open')),
+
+  pps_quality smallint check (pps_quality between 1 and 10),
+
+  -- Texture words like 'spacious','electric','flowing'. Validated app-side
+  -- against TEXTURE_CHIPS in src/lib/check-in-config.ts.
+  texture_chips text[] not null default '{}',
+
+  -- Layer 2
+  journal_text text,
+  -- If true, the student wrote on paper today and is just marking it done.
+  journaled_on_paper boolean not null default false,
+
+  -- Optional, peripheral; NOT part of the streak.
+  hrv_value smallint check (hrv_value > 0 and hrv_value < 250),
+
+  -- Convenience flag for the streak engine. Computed app-side at write.
+  fast_path_completed boolean not null default false,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  unique (user_id, local_date)
+);
+
+create index if not exists check_ins_user_date_idx
+  on public.check_ins (user_id, local_date desc);
+
+-- =====================================================================
+--  check_in_routines — routines done within a check-in (multi)
+--  routine_type ∈ blrm / aerobic / yoga / savasana10
+--  preset_slug is nullable (blrm and savasana10 have no preset)
+-- =====================================================================
+create table if not exists public.check_in_routines (
+  id uuid primary key default gen_random_uuid(),
+  check_in_id uuid not null references public.check_ins(id) on delete cascade,
+  routine_type text not null
+    check (routine_type in ('blrm','aerobic','yoga','savasana10')),
+  preset_slug text,                       -- nullable; validated app-side
+  duration_minutes integer check (duration_minutes between 1 and 600),
   created_at timestamptz not null default now()
 );
 
-create index if not exists practice_sessions_user_id_idx on public.practice_sessions (user_id);
-create index if not exists practice_sessions_started_at_idx on public.practice_sessions (started_at desc);
+create index if not exists check_in_routines_check_in_idx
+  on public.check_in_routines (check_in_id);
+create index if not exists check_in_routines_type_idx
+  on public.check_in_routines (routine_type);
 
 -- =====================================================================
---  Journal Entries — practice_session_id is nullable on purpose:
---  catching a post-practice thought later in the day is the habit
---  we want to encourage, not punish.
+--  check_in_opened_into — what the post-practice window opened into.
+--  Multi-select with a gentle "is_primary" nudge so charts have a
+--  single focus value when the student picks one.
 -- =====================================================================
-create table if not exists public.journal_entries (
+create table if not exists public.check_in_opened_into (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id) on delete cascade,
-  practice_session_id uuid references public.practice_sessions(id) on delete set null,
-  written_at timestamptz not null default now(),
+  check_in_id uuid not null references public.check_ins(id) on delete cascade,
+  category text not null
+    check (category in ('creative','learning','reflective','engaged','other','rested')),
+  activity_slug text not null,            -- matches OPENED_INTO_ACTIVITIES
+  free_text text,                         -- used only when activity_slug='other'
+  is_primary boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists check_in_opened_into_check_in_idx
+  on public.check_in_opened_into (check_in_id);
+create index if not exists check_in_opened_into_category_idx
+  on public.check_in_opened_into (category);
+create index if not exists check_in_opened_into_activity_idx
+  on public.check_in_opened_into (activity_slug);
+
+-- Only one primary opened-into per check-in (enforced when is_primary=true).
+create unique index if not exists check_in_opened_into_one_primary
+  on public.check_in_opened_into (check_in_id)
+  where is_primary;
+
+-- =====================================================================
+--  creation_logs — Layer 2 artifact / output log, multi per check-in.
+--  Tagged for chartability (music / language / garden / writing / other).
+-- =====================================================================
+create table if not exists public.creation_logs (
+  id uuid primary key default gen_random_uuid(),
+  check_in_id uuid not null references public.check_ins(id) on delete cascade,
+  tag text not null check (tag in ('music','language','garden','writing','other')),
   body text not null,
-  written_inside_window boolean not null default false,
-  shared_with_cohort boolean not null default false,
   created_at timestamptz not null default now()
 );
 
-create index if not exists journal_entries_user_id_idx on public.journal_entries (user_id);
-create index if not exists journal_entries_written_at_idx on public.journal_entries (written_at desc);
+create index if not exists creation_logs_check_in_idx
+  on public.creation_logs (check_in_id);
+create index if not exists creation_logs_tag_idx on public.creation_logs (tag);
 
 -- =====================================================================
---  Modules + per-user progress
+--  course_content — wired-but-empty slot for the videos/audio that
+--  arrive in ~1 month. course_slug starts with 'pps' and is extensible
+--  to the five-course sequence.
 -- =====================================================================
-create table if not exists public.modules (
+create table if not exists public.course_content (
   id uuid primary key default gen_random_uuid(),
-  stage alchemical_stage not null,
-  order_index integer not null,
+  course_slug text not null,              -- 'pps' to start
+  content_type text not null check (content_type in ('video','audio')),
   title text not null,
+  slug text not null,                     -- unique within course_slug
+  order_index integer not null default 0,
+  url text,                               -- nullable until content arrives
+  duration_seconds integer,
+  transcript text,
   description text,
-  video_url text,
-  workbook_content jsonb,
-  unlocked_after_practices integer not null default 0,
+  language text not null default 'en',    -- multilingual readiness
+  is_published boolean not null default false,
   created_at timestamptz not null default now(),
-  unique (stage, order_index)
+  updated_at timestamptz not null default now(),
+  unique (course_slug, slug, language)
 );
 
-create table if not exists public.module_progress (
+create index if not exists course_content_course_idx
+  on public.course_content (course_slug, order_index);
+
+-- =====================================================================
+--  course_progress — per-user resume + completion
+-- =====================================================================
+create table if not exists public.course_progress (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
-  module_id uuid not null references public.modules(id) on delete cascade,
+  content_id uuid not null references public.course_content(id) on delete cascade,
+  last_position_seconds integer not null default 0,
   completed_at timestamptz,
-  workbook_responses jsonb,
-  created_at timestamptz not null default now(),
-  unique (user_id, module_id)
+  updated_at timestamptz not null default now(),
+  unique (user_id, content_id)
 );
 
 -- =====================================================================
---  Voice Notes — Alison's pre-recorded encouragement
+--  updated_at triggers
 -- =====================================================================
-create table if not exists public.voice_notes (
-  id uuid primary key default gen_random_uuid(),
-  trigger_event voice_note_trigger not null,
-  audio_url text not null,
-  transcript text,
-  recorded_at timestamptz not null default now(),
-  created_at timestamptz not null default now()
-);
+create or replace function public.touch_updated_at() returns trigger
+  language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
 
--- =====================================================================
---  Community Letters — explicit per-entry shares to cohort
--- =====================================================================
-create table if not exists public.community_letters (
-  id uuid primary key default gen_random_uuid(),
-  sender_user_id uuid not null references public.users(id) on delete cascade,
-  recipient_cohort_id uuid not null references public.cohorts(id) on delete cascade,
-  journal_entry_id uuid not null references public.journal_entries(id) on delete cascade,
-  sent_at timestamptz not null default now(),
-  created_at timestamptz not null default now()
-);
+drop trigger if exists users_touch on public.users;
+create trigger users_touch before update on public.users
+  for each row execute function public.touch_updated_at();
 
-create index if not exists community_letters_cohort_idx on public.community_letters (recipient_cohort_id, sent_at desc);
+drop trigger if exists check_ins_touch on public.check_ins;
+create trigger check_ins_touch before update on public.check_ins
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists course_content_touch on public.course_content;
+create trigger course_content_touch before update on public.course_content
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists course_progress_touch on public.course_progress;
+create trigger course_progress_touch before update on public.course_progress
+  for each row execute function public.touch_updated_at();
 
 -- =====================================================================
 --  RLS — Clerk session sub claim drives ownership
---
 --  Clerk JWT template named 'supabase' must include `sub` = clerk_user_id.
---  See: https://clerk.com/docs/integrations/databases/supabase
 -- =====================================================================
 
--- Helper: current Clerk user id from JWT
 create or replace function public.current_clerk_user_id() returns text
   language sql stable as $$
   select coalesce(auth.jwt() ->> 'sub', '')::text;
 $$;
 
--- Helper: current internal user uuid
 create or replace function public.current_user_id() returns uuid
   language sql stable as $$
   select id from public.users where clerk_user_id = public.current_clerk_user_id();
 $$;
 
--- Helper: is current user a teacher?
-create or replace function public.current_user_is_teacher() returns boolean
-  language sql stable as $$
-  select exists (
-    select 1 from public.users
-    where clerk_user_id = public.current_clerk_user_id()
-      and role = 'teacher'
-  );
-$$;
-
 alter table public.users enable row level security;
-alter table public.cohorts enable row level security;
-alter table public.practice_sessions enable row level security;
-alter table public.journal_entries enable row level security;
-alter table public.modules enable row level security;
-alter table public.module_progress enable row level security;
-alter table public.voice_notes enable row level security;
-alter table public.community_letters enable row level security;
+alter table public.check_ins enable row level security;
+alter table public.check_in_routines enable row level security;
+alter table public.check_in_opened_into enable row level security;
+alter table public.creation_logs enable row level security;
+alter table public.course_content enable row level security;
+alter table public.course_progress enable row level security;
 
--- ---- users ----
-drop policy if exists users_self_read on public.users;
-create policy users_self_read on public.users
-  for select using (
-    clerk_user_id = public.current_clerk_user_id()
-    or public.current_user_is_teacher()
-  );
+-- users: self only (admin/service-role inserts via webhook)
+drop policy if exists users_self_select on public.users;
+create policy users_self_select on public.users
+  for select using (clerk_user_id = public.current_clerk_user_id());
 
 drop policy if exists users_self_update on public.users;
 create policy users_self_update on public.users
   for update using (clerk_user_id = public.current_clerk_user_id());
 
--- Insert is done by the Clerk webhook with service-role key, which bypasses RLS.
-
--- ---- cohorts ----
-drop policy if exists cohorts_read_all_signed_in on public.cohorts;
-create policy cohorts_read_all_signed_in on public.cohorts
-  for select using (public.current_clerk_user_id() <> '');
-
--- ---- practice_sessions ----
-drop policy if exists practice_sessions_owner_all on public.practice_sessions;
-create policy practice_sessions_owner_all on public.practice_sessions
+-- check_ins: owner full CRUD
+drop policy if exists check_ins_owner_all on public.check_ins;
+create policy check_ins_owner_all on public.check_ins
   for all using (user_id = public.current_user_id())
   with check (user_id = public.current_user_id());
 
-drop policy if exists practice_sessions_teacher_read on public.practice_sessions;
-create policy practice_sessions_teacher_read on public.practice_sessions
-  for select using (public.current_user_is_teacher());
+-- check_in_routines: owner via parent check-in
+drop policy if exists check_in_routines_owner_all on public.check_in_routines;
+create policy check_in_routines_owner_all on public.check_in_routines
+  for all using (
+    check_in_id in (select id from public.check_ins where user_id = public.current_user_id())
+  )
+  with check (
+    check_in_id in (select id from public.check_ins where user_id = public.current_user_id())
+  );
 
--- ---- journal_entries ----
-drop policy if exists journal_entries_owner_all on public.journal_entries;
-create policy journal_entries_owner_all on public.journal_entries
+-- check_in_opened_into: owner via parent check-in
+drop policy if exists check_in_opened_into_owner_all on public.check_in_opened_into;
+create policy check_in_opened_into_owner_all on public.check_in_opened_into
+  for all using (
+    check_in_id in (select id from public.check_ins where user_id = public.current_user_id())
+  )
+  with check (
+    check_in_id in (select id from public.check_ins where user_id = public.current_user_id())
+  );
+
+-- creation_logs: owner via parent check-in
+drop policy if exists creation_logs_owner_all on public.creation_logs;
+create policy creation_logs_owner_all on public.creation_logs
+  for all using (
+    check_in_id in (select id from public.check_ins where user_id = public.current_user_id())
+  )
+  with check (
+    check_in_id in (select id from public.check_ins where user_id = public.current_user_id())
+  );
+
+-- course_content: everyone signed-in can read published rows; writes admin-only
+drop policy if exists course_content_published_read on public.course_content;
+create policy course_content_published_read on public.course_content
+  for select using (
+    is_published = true and public.current_clerk_user_id() <> ''
+  );
+
+-- course_progress: owner only
+drop policy if exists course_progress_owner_all on public.course_progress;
+create policy course_progress_owner_all on public.course_progress
   for all using (user_id = public.current_user_id())
   with check (user_id = public.current_user_id());
-
--- Teachers can read journal entries ONLY for students who opted in.
-drop policy if exists journal_entries_teacher_read_consented on public.journal_entries;
-create policy journal_entries_teacher_read_consented on public.journal_entries
-  for select using (
-    public.current_user_is_teacher()
-    and exists (
-      select 1 from public.users u
-      where u.id = journal_entries.user_id
-        and u.journal_visibility_consent = true
-    )
-  );
-
--- Cohort-mates can read entries explicitly shared via community_letters.
-drop policy if exists journal_entries_cohort_read_shared on public.journal_entries;
-create policy journal_entries_cohort_read_shared on public.journal_entries
-  for select using (
-    shared_with_cohort = true
-    and exists (
-      select 1
-      from public.community_letters cl
-      join public.users me on me.id = public.current_user_id()
-      where cl.journal_entry_id = journal_entries.id
-        and cl.recipient_cohort_id = me.cohort_id
-    )
-  );
-
--- ---- modules ----
-drop policy if exists modules_read_all_signed_in on public.modules;
-create policy modules_read_all_signed_in on public.modules
-  for select using (public.current_clerk_user_id() <> '');
-
--- ---- module_progress ----
-drop policy if exists module_progress_owner_all on public.module_progress;
-create policy module_progress_owner_all on public.module_progress
-  for all using (user_id = public.current_user_id())
-  with check (user_id = public.current_user_id());
-
-drop policy if exists module_progress_teacher_read on public.module_progress;
-create policy module_progress_teacher_read on public.module_progress
-  for select using (public.current_user_is_teacher());
-
--- ---- voice_notes ----
-drop policy if exists voice_notes_read_all_signed_in on public.voice_notes;
-create policy voice_notes_read_all_signed_in on public.voice_notes
-  for select using (public.current_clerk_user_id() <> '');
-
-drop policy if exists voice_notes_teacher_write on public.voice_notes;
-create policy voice_notes_teacher_write on public.voice_notes
-  for all using (public.current_user_is_teacher())
-  with check (public.current_user_is_teacher());
-
--- ---- community_letters ----
-drop policy if exists community_letters_sender_insert on public.community_letters;
-create policy community_letters_sender_insert on public.community_letters
-  for insert with check (sender_user_id = public.current_user_id());
-
-drop policy if exists community_letters_cohort_read on public.community_letters;
-create policy community_letters_cohort_read on public.community_letters
-  for select using (
-    exists (
-      select 1 from public.users me
-      where me.id = public.current_user_id()
-        and me.cohort_id = community_letters.recipient_cohort_id
-    )
-  );
 
 -- =====================================================================
---  Storage buckets (created via Supabase Studio after migration runs):
---    - profile-photos    (public read; owner write)
---    - practice-spaces   (public read; owner write)
---    - voice-notes       (signed-url read; teacher write)
---    - module-videos     (signed-url read; teacher write)
+--  Storage buckets (create via Supabase Studio after migration):
+--    avatars        (public read; owner write)
+--    course-media   (signed-url read; admin write)
 -- =====================================================================

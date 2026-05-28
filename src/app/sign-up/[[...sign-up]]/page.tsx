@@ -2,35 +2,37 @@ import { SignUp } from "@clerk/nextjs";
 
 export default function SignUpPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-12 bg-cream">
-      <div className="w-full max-w-md">
-        <div className="mb-10 text-center">
-          <p className="text-xs uppercase tracking-[0.2em] text-sage-grey">
-            The Alchemille
+    <div className="min-h-screen flex items-center justify-center px-5 py-12 bg-cream">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 text-center">
+          <p className="text-xs uppercase tracking-[0.2em] text-sage-deep">
+            Alchemille
           </p>
-          <h1 className="mt-3 font-serif text-3xl text-forest">Enter.</h1>
-          <p className="mt-3 text-sm text-sage-grey">
-            Make a quiet account. We&rsquo;ll set up your garden next.
+          <h1 className="mt-2 font-display text-3xl text-forest">
+            Make an account.
+          </h1>
+          <p className="mt-2 text-small text-sage-deep">
+            We&rsquo;ll set up your check-in next.
           </p>
         </div>
         <SignUp
           appearance={{
             elements: {
               rootBox: "w-full",
-              card: "bg-cream shadow-none border border-sage/30 rounded-lg",
-              headerTitle: "font-serif text-forest",
+              card: "bg-cream-deep shadow-card border border-sage/30 rounded-card",
+              headerTitle: "font-display text-forest",
               formButtonPrimary:
-                "bg-forest hover:bg-forest-deep text-cream normal-case tracking-wide",
-              footerActionLink: "text-gold hover:text-coral",
+                "bg-terracotta hover:bg-terracotta-deep text-cream normal-case tracking-wide rounded-cta",
+              footerActionLink: "text-terracotta hover:text-terracotta-deep",
             },
             variables: {
-              colorPrimary: "#2F4F3A",
-              colorBackground: "#FBF7EE",
-              colorText: "#2F4F3A",
-              colorInputBackground: "#FBF7EE",
-              colorInputText: "#1F2A24",
-              fontFamily: "var(--font-inter), system-ui, sans-serif",
-              borderRadius: "0.375rem",
+              colorPrimary: "#C06B47",
+              colorBackground: "#F4EFE3",
+              colorText: "#2E4332",
+              colorInputBackground: "#F4EFE3",
+              colorInputText: "#2E4332",
+              fontFamily: "var(--font-sans), system-ui, sans-serif",
+              borderRadius: "0.625rem",
             },
           }}
         />

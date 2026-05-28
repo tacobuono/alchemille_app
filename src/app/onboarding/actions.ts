@@ -3,14 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { onboardingSchema, type OnboardingInput } from "@/lib/schemas/onboarding";
+import {
+  onboardingSchema,
+  type OnboardingInput,
+} from "@/lib/schemas/onboarding";
 
 /**
- * Server action: save the student's onboarding answers.
+ * Server action — saves the student's onboarding answers and marks
+ * onboarding_completed_at so the (app) shell stops redirecting them.
  *
- * Uses the admin client because the users row may not yet have a
- * synced clerk_user_id at first sign-up (race against the Clerk
- * webhook). The action upserts on clerk_user_id to be idempotent.
+ * Uses the admin client (service-role) because the users row may not
+ * yet exist if the Clerk webhook hasn't fired. Upserts on clerk_user_id.
  */
 export async function completeOnboarding(input: OnboardingInput): Promise<
   { ok: true } | { ok: false; error: string }
@@ -31,8 +34,7 @@ export async function completeOnboarding(input: OnboardingInput): Promise<
   if (!email) {
     return {
       ok: false,
-      error:
-        "Email missing from session. Sign out and back in, or contact Alison.",
+      error: "Email missing from session. Sign out and back in.",
     };
   }
 
@@ -42,13 +44,11 @@ export async function completeOnboarding(input: OnboardingInput): Promise<
     {
       clerk_user_id: userId,
       email,
-      name: parsed.data.name,
-      profile_photo_url: parsed.data.profilePhotoUrl,
-      practice_space_photo_url: parsed.data.practiceSpacePhotoUrl || null,
+      display_name: parsed.data.displayName,
+      avatar_url: parsed.data.avatarUrl || null,
       timezone: parsed.data.timezone,
       language_preference: parsed.data.languagePreference,
-      journal_visibility_consent: parsed.data.journalVisibilityConsent,
-      garden_visibility_to_cohort: parsed.data.gardenVisibilityToCohort,
+      onboarding_completed_at: new Date().toISOString(),
     },
     { onConflict: "clerk_user_id" }
   );

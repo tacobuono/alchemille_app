@@ -13,8 +13,7 @@ import { completeOnboarding } from "./actions";
 
 interface OnboardingFormProps {
   initialName: string;
-  initialProfilePhoto: string;
-  initialPracticeSpace: string;
+  initialAvatar: string;
   initialTimezone: string;
   initialLang: string;
 }
@@ -33,15 +32,14 @@ const TIMEZONES = [
 
 export function OnboardingForm({
   initialName,
-  initialProfilePhoto,
-  initialPracticeSpace,
+  initialAvatar,
   initialTimezone,
   initialLang,
 }: OnboardingFormProps) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [uploading, setUploading] = useState<"profile" | "space" | null>(null);
 
   const {
     register,
@@ -52,67 +50,45 @@ export function OnboardingForm({
   } = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingSchema),
     defaultValues: {
-      name: initialName,
-      profilePhotoUrl: initialProfilePhoto,
-      practiceSpacePhotoUrl: initialPracticeSpace,
+      displayName: initialName,
+      avatarUrl: initialAvatar,
       timezone: initialTimezone,
       languagePreference: initialLang,
-      journalVisibilityConsent: false,
-      gardenVisibilityToCohort: false,
     },
   });
 
-  const profilePhotoUrl = watch("profilePhotoUrl");
-  const practiceSpacePhotoUrl = watch("practiceSpacePhotoUrl");
+  const avatarUrl = watch("avatarUrl") ?? "";
 
-  async function uploadPhoto(
-    file: File,
-    kind: "profile" | "space"
-  ): Promise<string | null> {
-    setUploading(kind);
+  async function onAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
     setServerError(null);
     try {
       const supabase = createSupabaseBrowserClient();
-      const bucket = kind === "profile" ? "profile-photos" : "practice-spaces";
       const ext = file.name.split(".").pop() ?? "jpg";
       const path = `${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage
-        .from(bucket)
+        .from("avatars")
         .upload(path, file, { upsert: false, cacheControl: "3600" });
       if (error) {
         setServerError(`Upload failed: ${error.message}`);
-        return null;
+        return;
       }
-      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-      return data.publicUrl;
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      setValue("avatarUrl", data.publicUrl, { shouldValidate: true });
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "Upload failed.";
       setServerError(message);
-      return null;
     } finally {
-      setUploading(null);
+      setUploading(false);
     }
-  }
-
-  async function onProfileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = await uploadPhoto(file, "profile");
-    if (url) setValue("profilePhotoUrl", url, { shouldValidate: true });
-  }
-
-  async function onSpaceChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = await uploadPhoto(file, "space");
-    if (url) setValue("practiceSpacePhotoUrl", url, { shouldValidate: true });
   }
 
   function onSubmit(data: OnboardingFormValues) {
     setServerError(null);
     startTransition(async () => {
-      // Re-parse so server gets the fully-defaulted output shape.
       const parsed = onboardingSchema.parse(data);
       const res = await completeOnboarding(parsed);
       if (res.ok) {
@@ -128,70 +104,75 @@ export function OnboardingForm({
     <form
       onSubmit={handleSubmit(onSubmit)}
       noValidate
-      className="space-y-10"
+      className="space-y-8"
       aria-describedby={serverError ? "form-error" : undefined}
     >
       <fieldset className="space-y-2">
-        <label htmlFor="name" className="block text-sm text-forest">
+        <label
+          htmlFor="displayName"
+          className="block text-small text-forest"
+        >
           Your name
         </label>
         <input
-          id="name"
+          id="displayName"
           type="text"
           autoComplete="name"
-          {...register("name")}
-          className="w-full h-11 px-3 bg-cream border border-sage/50 rounded text-forest-dark placeholder:text-sage focus:outline-none focus:border-forest"
+          {...register("displayName")}
+          className="w-full h-12 px-4 bg-cream-deep border border-sage/40 rounded text-forest placeholder:text-sage-deep focus:outline-none focus:border-terracotta"
           placeholder="What we should call you"
-          aria-invalid={errors.name ? "true" : "false"}
-          aria-describedby={errors.name ? "name-error" : undefined}
+          aria-invalid={errors.displayName ? "true" : "false"}
         />
-        {errors.name && (
-          <p id="name-error" role="alert" className="text-sm text-coral">
-            {errors.name.message}
+        {errors.displayName && (
+          <p role="alert" className="text-small text-terracotta">
+            {errors.displayName.message}
           </p>
         )}
       </fieldset>
 
       <fieldset className="space-y-3">
-        <legend className="text-sm text-forest">Profile photo</legend>
-        <PhotoSlot
-          previewUrl={profilePhotoUrl}
-          uploading={uploading === "profile"}
-          onChange={onProfileChange}
-          alt="Profile photo preview"
-          helpText="A face we can recognize. JPG or PNG."
-        />
-        <input type="hidden" {...register("profilePhotoUrl")} />
-        {errors.profilePhotoUrl && (
-          <p role="alert" className="text-sm text-coral">
-            {errors.profilePhotoUrl.message}
-          </p>
-        )}
-      </fieldset>
-
-      <fieldset className="space-y-3">
-        <legend className="text-sm text-forest">
-          Where you practice <span className="text-sage-grey">(optional)</span>
+        <legend className="text-small text-forest">
+          Avatar <span className="text-sage-deep">(optional)</span>
         </legend>
-        <PhotoSlot
-          previewUrl={practiceSpacePhotoUrl ?? ""}
-          uploading={uploading === "space"}
-          onChange={onSpaceChange}
-          alt="Practice space preview"
-          helpText="Your mat, your corner, your room. Skip if you'd rather not."
-        />
-        <input type="hidden" {...register("practiceSpacePhotoUrl")} />
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full border border-sage/40 bg-cream-deep overflow-hidden flex items-center justify-center">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt="Avatar preview"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-xs text-sage-deep">none</span>
+            )}
+          </div>
+          <label className="inline-flex items-center justify-center h-10 px-4 bg-cream-deep border border-sage/40 rounded text-small text-forest cursor-pointer hover:bg-sage-tint transition-colors">
+            {uploading ? "Uploading…" : avatarUrl ? "Change" : "Choose photo"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onAvatarChange}
+              disabled={uploading}
+            />
+          </label>
+        </div>
+        <input type="hidden" {...register("avatarUrl")} />
       </fieldset>
 
-      <div className="grid sm:grid-cols-2 gap-6">
+      <div className="grid grid-cols-2 gap-4">
         <fieldset className="space-y-2">
-          <label htmlFor="timezone" className="block text-sm text-forest">
+          <label
+            htmlFor="timezone"
+            className="block text-small text-forest"
+          >
             Time zone
           </label>
           <select
             id="timezone"
             {...register("timezone")}
-            className="w-full h-11 px-3 bg-cream border border-sage/50 rounded text-forest-dark focus:outline-none focus:border-forest"
+            className="w-full h-12 px-3 bg-cream-deep border border-sage/40 rounded text-forest focus:outline-none focus:border-terracotta"
           >
             {TIMEZONES.map((tz) => (
               <option key={tz} value={tz}>
@@ -204,14 +185,14 @@ export function OnboardingForm({
         <fieldset className="space-y-2">
           <label
             htmlFor="languagePreference"
-            className="block text-sm text-forest"
+            className="block text-small text-forest"
           >
             Language
           </label>
           <select
             id="languagePreference"
             {...register("languagePreference")}
-            className="w-full h-11 px-3 bg-cream border border-sage/50 rounded text-forest-dark focus:outline-none focus:border-forest"
+            className="w-full h-12 px-3 bg-cream-deep border border-sage/40 rounded text-forest focus:outline-none focus:border-terracotta"
           >
             <option value="en">English</option>
             <option value="fr">Français</option>
@@ -220,98 +201,19 @@ export function OnboardingForm({
         </fieldset>
       </div>
 
-      <fieldset className="space-y-4 border-t border-sage/30 pt-8">
-        <legend className="font-serif text-headline text-forest">
-          Two quiet choices
-        </legend>
-
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            {...register("journalVisibilityConsent")}
-            className="mt-1 w-4 h-4 accent-forest"
-          />
-          <span className="text-sm text-forest-dark">
-            <span className="font-medium">Let Alison read my journal.</span>{" "}
-            <span className="text-sage-grey">
-              You can turn this off any time. She will never share or quote
-              without asking.
-            </span>
-          </span>
-        </label>
-
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            {...register("gardenVisibilityToCohort")}
-            className="mt-1 w-4 h-4 accent-forest"
-          />
-          <span className="text-sm text-forest-dark">
-            <span className="font-medium">
-              Show my garden to my cohort.
-            </span>{" "}
-            <span className="text-sage-grey">
-              Just the herbs, no journal text. Off by default.
-            </span>
-          </span>
-        </label>
-      </fieldset>
-
       {serverError && (
-        <p id="form-error" role="alert" className="text-sm text-coral">
+        <p id="form-error" role="alert" className="text-small text-terracotta">
           {serverError}
         </p>
       )}
 
       <button
         type="submit"
-        disabled={isSubmitting || isPending || uploading !== null}
-        className="inline-flex items-center justify-center h-12 px-8 bg-forest text-cream rounded text-sm tracking-wide hover:bg-forest-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={isSubmitting || isPending || uploading}
+        className="w-full h-12 rounded-cta bg-terracotta text-cream font-medium shadow-cta hover:bg-terracotta-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isPending ? "Saving…" : "Enter the garden"}
+        {isPending ? "Saving…" : "Continue"}
       </button>
     </form>
-  );
-}
-
-interface PhotoSlotProps {
-  previewUrl: string;
-  uploading: boolean;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  alt: string;
-  helpText: string;
-}
-
-function PhotoSlot({
-  previewUrl,
-  uploading,
-  onChange,
-  alt,
-  helpText,
-}: PhotoSlotProps) {
-  return (
-    <div className="flex items-center gap-4">
-      <div className="w-24 h-24 rounded-lg border border-sage/40 bg-cream-deep overflow-hidden flex items-center justify-center">
-        {previewUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt={alt} className="w-full h-full object-cover" />
-        ) : (
-          <span className="text-xs text-sage-grey">no photo</span>
-        )}
-      </div>
-      <div className="flex-1">
-        <label className="inline-flex items-center justify-center h-9 px-4 bg-cream-deep border border-sage/50 rounded text-sm text-forest cursor-pointer hover:bg-cream transition-colors">
-          {uploading ? "Uploading…" : previewUrl ? "Change" : "Choose photo"}
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={onChange}
-            disabled={uploading}
-          />
-        </label>
-        <p className="mt-2 text-xs text-sage-grey">{helpText}</p>
-      </div>
-    </div>
   );
 }
