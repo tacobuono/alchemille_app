@@ -2,26 +2,111 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * The Alchemille — base layer
+ *
+ * Stage-driven CSS variables. Nigredo is desaturated. Albedo brightens.
+ * Rubedo blooms with full palette. The layout shell sets data-stage on <html>.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Default = Albedo (cream + forest). Set on html by layout shell. */
+  --background: 251 247 238; /* cream #FBF7EE */
+  --foreground: 47 79 58; /* forest #2F4F3A */
+  --muted: 107 122 114; /* sage-grey */
+  --border: 143 168 154; /* mid-sage */
+  --accent: 168 135 76; /* gold */
+
+  /* Georgia is a system serif on every platform — no import needed.
+     This fallback variable is referenced by tailwind's serif stack. */
+  --font-georgia-fallback: Georgia;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+[data-stage="nigredo"] {
+  --background: 232 229 222; /* bone */
+  --foreground: 58 66 57; /* desaturated forest */
+  --muted: 122 128 121;
+  --border: 188 192 184;
+  --accent: 168 135 76;
+}
+
+[data-stage="albedo"] {
+  --background: 251 247 238;
+  --foreground: 47 79 58;
+  --muted: 107 122 114;
+  --border: 143 168 154;
+  --accent: 168 135 76;
+}
+
+[data-stage="rubedo"] {
+  --background: 251 247 238;
+  --foreground: 47 79 58;
+  --muted: 107 122 114;
+  --border: 143 168 154;
+  --accent: 201 83 58; /* coral blooms */
+}
+
+html {
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6, .font-serif {
+  font-family: Georgia, var(--font-georgia-fallback), ui-serif, Cambria,
+    "Times New Roman", Times, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* Editorial pull-quote — used by journal entries and module cards */
+.pull-quote {
+  font-family: Georgia, ui-serif, serif;
+  font-style: italic;
+  background: rgb(var(--background));
+  border-left: 2px solid rgb(var(--accent));
+  padding: 1rem 1.25rem;
+}
+
+/* Window-light gradient — the centerpiece dashboard element.
+   Gold light pouring through forest green; dims over the post-practice window. */
+.window-light {
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    rgb(212 167 75 / var(--window-intensity, 0)) 0%,
+    rgb(212 167 75 / calc(var(--window-intensity, 0) * 0.4)) 30%,
+    transparent 70%
+  );
+  transition: --window-intensity 2400ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

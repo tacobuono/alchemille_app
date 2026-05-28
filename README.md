@@ -1,36 +1,116 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# The Alchemille — Student App
 
-## Getting Started
+Next.js 15 app for **The Post-Practice State** premier course.
+Tracks each student's practice, opens the post-practice window, grows a garden
+of herbs, and surfaces Alison's voice notes at milestones.
 
-First, run the development server:
+> The Alchemille teaches yoga for the artist, the academic, and the serious
+> practitioner — weaving the soul of the tradition with the neuroscience of its
+> fruits.
+
+## Stack
+
+| Layer        | Choice                                |
+| ------------ | ------------------------------------- |
+| Framework    | Next.js 15 (App Router) + TypeScript  |
+| Styling      | Tailwind CSS + Alchemille palette     |
+| Typography   | Georgia (serif) + Inter (sans)        |
+| Auth         | Clerk                                 |
+| Database     | Supabase (Postgres + RLS + Storage)   |
+| Forms        | react-hook-form + Zod                 |
+| Animation    | Framer Motion                         |
+| Email        | Resend                                |
+| Charts       | Recharts (teacher dashboard)          |
+| Hosting      | Vercel (`alchemilleapp.vercel.app`)   |
+
+## First-time setup
 
 ```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure environment
+cp .env.local.example .env.local
+# fill in Clerk, Supabase, and Resend keys
+
+# 3. Run the Supabase migration
+#    Studio → SQL Editor → paste supabase/migrations/0001_initial.sql → Run
+#    Or with the Supabase CLI:
+#    npx supabase db push
+
+# 4. Create Storage buckets in Supabase Studio:
+#    - profile-photos    (public)
+#    - practice-spaces   (public)
+#    - voice-notes       (private, signed URLs)
+#    - module-videos     (private, signed URLs)
+
+# 5. Configure Clerk:
+#    - Create application
+#    - Set fallback redirect URLs (see .env.local.example)
+#    - Webhooks → add <APP_URL>/api/webhooks/clerk
+#      events: user.created, user.updated, user.deleted
+
+# 6. Run dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+App lives at <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project layout
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/
+│   ├── (app)/                # Authenticated shell (spine + header)
+│   │   ├── layout.tsx        # Resolves stage, gates onboarding
+│   │   └── dashboard/        # Window + garden + begin-practice
+│   ├── api/webhooks/clerk/   # Clerk → Supabase user sync
+│   ├── onboarding/           # Outside (app) — fresh sign-ups land here
+│   ├── sign-in/[[...sign-in]]/
+│   ├── sign-up/[[...sign-up]]/
+│   ├── layout.tsx            # ClerkProvider + Inter
+│   ├── globals.css           # Stage CSS vars + base typography
+│   └── page.tsx              # Public landing letter
+├── components/layout/        # AlchemicalSpine + AppHeader
+├── lib/
+│   ├── herbs.ts              # Curriculum-ordered herb catalog
+│   ├── stage.ts              # Nigredo / Albedo / Rubedo logic
+│   ├── schemas/              # Zod schemas (shared client+server)
+│   └── supabase/             # client / server / admin / types
+├── middleware.ts             # Clerk route protection
+└── ...
 
-## Learn More
+supabase/
+└── migrations/0001_initial.sql   # Tables, enums, RLS policies
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Build order (matches the original brief)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Week | Scope                                                  |
+| ---- | ------------------------------------------------------ |
+| 1    | Auth, onboarding, schema, Tailwind, layout shell ✅    |
+| 2    | Practice session UI (timer, video, capture form)       |
+| 3    | Journal flow (auto-open, time stamps, window detection)|
+| 4    | Dashboard polish (window animation, garden viz, spine) |
+| 5    | Voice notes, encouragement triggers, teacher dashboard |
+| 6    | Community garden, letters drawer, opt-in, polish       |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Brand voice — do not drift
 
-## Deploy on Vercel
+- Practitioner-researcher. Not wellness teacher.
+- No guru posture, no mystical overpromise.
+- Outcome first, method second.
+- "When in doubt: make it feel like a letter, not a landing page."
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Five experience principles
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Window opens visually** on the dashboard after each completed practice
+2. **Alchemical spine nav** — UI saturation increases with progress
+3. **Garden, not bar** — herbs accumulate
+4. **Journal auto-opens** post-practice; entries flagged in/outside window
+5. **Community is quiet** — letters drawer, no feed, no likes
+
+## Restart policy
+
+Students who fall off never reset. Garden persists. No streak counter shown.
+When they return: "your garden is waiting. let's add the next plant."
