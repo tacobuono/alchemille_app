@@ -1,5 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="14" fill="#F4EFE3"/>
-  <path d="M32 12c-7 9-12 16-12 23a12 12 0 0 0 24 0c0-7-5-14-12-23z" fill="#2E4332"/>
-  <path d="M32 22c-3 5-5 9-5 13a5 5 0 0 0 10 0c0-4-2-8-5-13z" fill="#C06B47"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" fill="#F4EFE3"/>
+  <g transform="translate(0, 0) scale(1)">
+    <!-- Forest leaf body -->
+    <path d="
+      M 256 80
+      C 146 200, 106 330, 166 400
+      C 216 450, 296 450, 346 400
+      C 406 330, 366 200, 256 80
+      Z"
+      fill="#2E4332"/>
+    <!-- Terracotta inner stem / heartline -->
+    <path d="
+      M 256 150
+      C 220 240, 206 320, 234 380
+      C 248 400, 264 400, 278 380
+      C 306 320, 292 240, 256 150
+      Z"
+      fill="#C06B47"/>
+    <!-- Subtle highlight along the spine -->
+    <path d="M 256 110 L 256 420"
+      stroke="#F4EFE3" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+  </g>
 </svg>

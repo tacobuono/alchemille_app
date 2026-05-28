@@ -189,3 +189,24 @@ export function isFastPathComplete(f: FastPathFields): boolean {
       f.pps_quality <= 10
   );
 }
+
+// =====================================================================
+//  PAPER-TOGGLE UI INVARIANT — enforced by step 3 (daily check-in form)
+//
+//  When `journaled_on_paper` is true, the journal_text input MUST be
+//  REMOVED FROM THE DOM. Not disabled, not hidden via aria-hidden, not
+//  greyed out — actually not rendered.
+//
+//  Why: the brand value is no-screen morning pages. Showing a typing
+//  surface while the toggle invites the student NOT to type undermines
+//  the whole point. The toggle has to remove the temptation.
+//
+//  Step 3 implementation rule:
+//      {journaledOnPaper ? null : <JournalTextarea />}
+//
+//  Anti-rules — do NOT do any of these:
+//      <textarea disabled={journaledOnPaper} />     // wrong: still visible
+//      <div hidden={journaledOnPaper}><textarea/>   // wrong: still in DOM
+//      <textarea style={{display: 'none'}} />       // wrong: still in DOM
+// =====================================================================
+export const PAPER_TOGGLE_HIDES_JOURNAL_FIELD = true;
