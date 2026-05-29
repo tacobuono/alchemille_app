@@ -70,31 +70,53 @@ is set by the app on write — never derived after the fact.
 
 ---
 
-## Clerk ↔ Supabase JWT integration (one-time setup)
+## Clerk ↔ Supabase auth integration
 
-Avatar uploads + any browser-side Supabase write that depends on RLS
-require the Clerk JWT to be forwarded to Supabase as the auth token,
-so policies that call `current_clerk_user_id()` resolve correctly.
+### v1 state (current): no JWT bridge
 
-**One-time setup in the Clerk dashboard:**
+For v1 (≤ 10 students, the first cohort) the Storage policy on the
+`avatars` bucket only checks `bucket_id = 'avatars'`. The browser
+Supabase client does NOT pass a Clerk JWT. Anyone who has the public
+anon key (which is in the browser bundle) can upload to that bucket.
+Acceptable for v1; not acceptable for public launch.
 
-1. Open https://dashboard.clerk.com → Configure → JWT Templates
-2. Click **New template** → choose **Blank**
-3. Name it exactly `supabase` (case-sensitive — the code requests this template by name)
-4. Leave the default claims; no edits needed. (`sub` is already set to the Clerk user id, which is what `current_clerk_user_id()` reads.)
-5. Save
+Applied as migration `storage_avatars_relaxed_for_v1`. Supersedes the
+earlier `0002_storage_policies.sql` which required
+`current_clerk_user_id() <> ''`.
 
-**That's it.** The code is already wired:
+### Why we relaxed it
 
-- `src/lib/supabase/client.ts` accepts a `getClerkToken` callback and
-  passes the token as an `Authorization: Bearer` header on every
-  Supabase request.
-- `src/app/onboarding/onboarding-form.tsx` and
-  `src/app/(app)/you/profile-form.tsx` call
-  `getToken({ template: "supabase" })` from Clerk's `useAuth()` and
-  pass it to `createSupabaseBrowserClient`.
-- `supabase/migrations/0002_storage_policies.sql` adds the RLS
-  policies that allow signed-in users to upload to the `avatars`
-  bucket and everyone to read from it.
+The first attempt forwarded the Clerk session JWT as the Supabase auth
+token. Supabase rejected it with:
 
-Without the template, avatar uploads fail with a Storage RLS error.
+> Upload failed: "alg" (Algorithm) Header Parameter value not allowed
+
+Clerk's JWT templates sign with RS256. Supabase's default JWT verifier
+expects HS256 (signed with Supabase's own secret). The two don't agree.
+
+### Proper fix before public launch
+
+Configure Clerk as a third-party auth provider in Supabase, which tells
+Supabase to trust RS256 JWTs from Clerk's JWKS endpoint:
+
+1. Supabase Dashboard → Authentication → Sign In / Providers
+2. Scroll to **Third-party Auth** → **Add provider** → **Clerk**
+3. Paste the Clerk frontend API domain
+   (for our project: `measured-raptor-89.clerk.accounts.dev`)
+4. Save
+
+After that, switch the avatars upload policy back to:
+
+```sql
+create policy "avatars_signed_in_upload"
+  on storage.objects
+  for insert
+  to anon, authenticated
+  with check (
+    bucket_id = 'avatars'
+    and (auth.jwt() ->> 'sub') <> ''
+  );
+```
+
+And re-wire `createSupabaseBrowserClient` to pass
+`getToken({ template: "supabase" })` from Clerk's `useAuth()`.

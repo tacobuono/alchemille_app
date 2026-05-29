@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   profileSchema,
@@ -38,7 +37,6 @@ export function ProfileForm({
   initialLang,
 }: ProfileFormProps) {
   const router = useRouter();
-  const { getToken } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -69,9 +67,7 @@ export function ProfileForm({
     setUploading(true);
     setServerError(null);
     try {
-      const supabase = createSupabaseBrowserClient(() =>
-        getToken({ template: "supabase" })
-      );
+      const supabase = createSupabaseBrowserClient();
       const ext = file.name.split(".").pop() ?? "jpg";
       const path = `${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage
