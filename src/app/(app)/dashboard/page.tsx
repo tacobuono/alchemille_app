@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { todayLocalDate } from "@/lib/dates";
 import { computeCurrentStreak } from "@/lib/streak";
 
@@ -16,7 +16,7 @@ export default async function TodayPage() {
   const { userId } = await auth();
   if (!userId) return null;
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
 
   const { data: profile } = await supabase
     .from("users")

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { todayLocalDate } from "@/lib/dates";
 import { CheckInForm } from "./check-in-form";
 import type { CheckInFormValues } from "@/lib/schemas/check-in";
@@ -13,7 +13,7 @@ export default async function CheckInPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
 
   const { data: profile } = await supabase
     .from("users")

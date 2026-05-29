@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ProfileForm } from "./profile-form";
 import { SignOutButton } from "./sign-out-button";
 
@@ -13,7 +13,7 @@ export default async function YouPage() {
   const { userId } = await auth();
   if (!userId) return null;
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { data: profile } = await supabase
     .from("users")
     .select("display_name, avatar_url, timezone, language_preference, email")
