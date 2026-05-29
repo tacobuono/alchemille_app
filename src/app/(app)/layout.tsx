@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { MobileNav } from "@/components/layout/mobile-nav";
 
 /**
@@ -8,8 +8,8 @@ import { MobileNav } from "@/components/layout/mobile-nav";
  * Mobile-first: a narrow centered content column with a fixed bottom
  * tab nav. Effortless one-handed.
  *
- * If the user hasn't completed onboarding (no users row OR
- * onboarding_completed_at is null), bounce to /onboarding.
+ * Uses the Supabase admin client for the onboarding guard because this
+ * server-side layout needs to reliably read the user's profile row.
  */
 export default async function AppLayout({
   children,
@@ -19,7 +19,7 @@ export default async function AppLayout({
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { data: profile } = await supabase
     .from("users")
     .select("id, onboarding_completed_at")
