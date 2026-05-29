@@ -67,3 +67,34 @@ is set by the app on write — never derived after the fact.
   testing. A real wordmark/symbol pass happens before launch.
 - Re-render with `node scripts/generate-pwa-icons.mjs` after editing
   the master SVG.
+
+---
+
+## Clerk ↔ Supabase JWT integration (one-time setup)
+
+Avatar uploads + any browser-side Supabase write that depends on RLS
+require the Clerk JWT to be forwarded to Supabase as the auth token,
+so policies that call `current_clerk_user_id()` resolve correctly.
+
+**One-time setup in the Clerk dashboard:**
+
+1. Open https://dashboard.clerk.com → Configure → JWT Templates
+2. Click **New template** → choose **Blank**
+3. Name it exactly `supabase` (case-sensitive — the code requests this template by name)
+4. Leave the default claims; no edits needed. (`sub` is already set to the Clerk user id, which is what `current_clerk_user_id()` reads.)
+5. Save
+
+**That's it.** The code is already wired:
+
+- `src/lib/supabase/client.ts` accepts a `getClerkToken` callback and
+  passes the token as an `Authorization: Bearer` header on every
+  Supabase request.
+- `src/app/onboarding/onboarding-form.tsx` and
+  `src/app/(app)/you/profile-form.tsx` call
+  `getToken({ template: "supabase" })` from Clerk's `useAuth()` and
+  pass it to `createSupabaseBrowserClient`.
+- `supabase/migrations/0002_storage_policies.sql` adds the RLS
+  policies that allow signed-in users to upload to the `avatars`
+  bucket and everyone to read from it.
+
+Without the template, avatar uploads fail with a Storage RLS error.

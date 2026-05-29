@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   onboardingSchema,
@@ -37,6 +38,7 @@ export function OnboardingForm({
   initialLang,
 }: OnboardingFormProps) {
   const router = useRouter();
+  const { getToken } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -65,7 +67,9 @@ export function OnboardingForm({
     setUploading(true);
     setServerError(null);
     try {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createSupabaseBrowserClient(() =>
+        getToken({ template: "supabase" })
+      );
       const ext = file.name.split(".").pop() ?? "jpg";
       const path = `${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage
